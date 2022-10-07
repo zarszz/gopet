@@ -161,3 +161,44 @@ func (ac *AuthController) LogoutUser(ctx *gin.Context) {
 
 	ctx.JSON(http.StatusOK, gin.H{"status": "success"})
 }
+
+func (ac *AuthController) ForgotPassword(ctx *gin.Context) {
+	var payload *models.ForgotPasswordInput
+
+	if err := ctx.ShouldBindJSON(&payload); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"status": "fail", "message": err.Error()})
+		return
+	}
+
+	if err := ac.authService.ForgotPassword(payload.Email, ac.temp); err != nil {
+		log.Printf("[controllers.ForgotPassword] error : %v", err)
+		ctx.JSON(http.StatusBadRequest, gin.H{"status": "fail", "message": "Forget password failed"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"status": "success"})
+}
+
+func (ac *AuthController) ResetPassword(ctx *gin.Context) {
+	var payload *models.ResetPasswordInput
+
+	if err := ctx.ShouldBindJSON(&payload); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"status": "fail", "message": err.Error()})
+		return
+	}
+
+	if payload.Password != payload.PasswordConfirm {
+		ctx.JSON(http.StatusBadRequest, gin.H{"status": "fail", "message": "password should be match"})
+		return
+	}
+
+	token := ctx.Param("token")
+
+	if err := ac.authService.ResetPassword(token, payload); err != nil {
+		log.Printf("[controllers.ResetPassword] error : %v", err)
+		ctx.JSON(http.StatusBadRequest, gin.H{"status": "fail", "message": "Reset password failed"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"status": "success"})
+}

@@ -1,6 +1,8 @@
 package services
 
-import "go-grpc/models"
+import (
+	"go-grpc/models"
+)
 
 type UserService interface {
 	FindUserById(string) (*models.DBResponse, error)

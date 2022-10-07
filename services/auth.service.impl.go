@@ -3,11 +3,15 @@ package services
 import (
 	"context"
 	"errors"
+	"go-grpc/config"
 	"go-grpc/models"
 	"go-grpc/utils"
+	"html/template"
+	"log"
 	"strings"
 	"time"
 
+	"github.com/thanhpk/randstr"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -61,6 +65,114 @@ func (uc *AuthServiceImpl) SignUpUser(user *models.SignUpInput) (*models.DBRespo
 
 	return newUser, nil
 }
+
 func (uc *AuthServiceImpl) SignInUser(user *models.SignInInput) (*models.DBResponse, error) {
 	return nil, nil
+}
+
+func (ac *AuthServiceImpl) ForgotPassword(email string, template *template.Template) error {
+	var user *models.DBResponse
+
+	query := bson.M{"email": strings.ToLower(email)}
+
+	err := ac.collection.FindOne(ac.ctx, query).Decode(&user)
+	if err != nil {
+		log.Printf("[ForgotPassword] error : %v", err)
+		if err == mongo.ErrNoDocuments {
+			return err
+		}
+		return err
+	}
+
+	if !user.Verified {
+		log.Printf("[ForgotPassword] user %s is unverified and send request forgot password", user.Email)
+		return errors.New("user is not verified")
+	}
+
+	config, err := config.LoadConfig(".")
+	if err != nil {
+		log.Printf("[ForgotPassword] could not load config: %v", err)
+		return err
+	}
+
+	resetToken := randstr.String(20)
+	filter := bson.D{{Key: "email", Value: user.Email}}
+	data := bson.D{{
+		Key: "$set",
+		Value: bson.D{
+			{Key: "password_reset_token", Value: utils.Encode(resetToken)},
+			{Key: "password_reset_at", Value: time.Now().Add(time.Minute * 15)},
+		},
+	}}
+
+	_, err = ac.collection.UpdateOne(ac.ctx, filter, data)
+	if err != nil {
+		log.Printf("[ForgotPassword] error when updaate collection: %v", err)
+		return err
+	}
+
+	var firstName = user.Name
+	emailData := utils.EmailData{
+		URL:       config.Origin + "/resetpassword/" + resetToken,
+		FirstName: firstName,
+		Subject:   "Your password reset token (valid for 10min)",
+	}
+
+	_ = utils.SendEmail(user, &emailData, template, "resetPassword.html")
+
+	return nil
+}
+
+func (ac *AuthServiceImpl) ResetPassword(token string, input *models.ResetPasswordInput) error {
+	var user *models.DBResponse
+
+	filter := bson.D{{Key: "password_reset_token", Value: token}}
+	err := ac.collection.FindOne(ac.ctx, filter).Decode(&user)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			log.Printf("[ResetPassword] error no user found with token : %s", token)
+		} else {
+			log.Printf("[ResetPassword] operation error when get document with token : %s", token)
+		}
+		return err
+	}
+
+	if time.Now().After(user.PasswordResetAt.Add(time.Minute * 10)) {
+		log.Println("[ResetPassword] reset password expired")
+		return errors.New("token expired")
+	}
+
+	hashedPassword, err := utils.HashPassword(input.Password)
+	if err != nil {
+		log.Printf("[ResetPassword] error when hash password : %v", err)
+		return err
+	}
+
+	filter = bson.D{{Key: "email", Value: user.Email}}
+	updateQuery := bson.D{
+		{
+			Key: "$set",
+			Value: bson.D{
+				{
+					Key:   "password",
+					Value: hashedPassword,
+				},
+				{
+					Key:   "password_reset_token",
+					Value: nil,
+				},
+				{
+					Key:   "password_reset_at",
+					Value: nil,
+				},
+			},
+		},
+	}
+	_, err = ac.collection.UpdateOne(ac.ctx, filter, updateQuery)
+	if err != nil {
+		log.Printf("[ResetPassword] error: user %s when updating new password", user.Email)
+		return err
+	}
+
+	return nil
 }

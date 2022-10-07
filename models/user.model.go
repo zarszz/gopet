@@ -23,15 +23,17 @@ type SignInInput struct {
 }
 
 type DBResponse struct {
-	ID              primitive.ObjectID `json:"id" bson:"_id"`
-	Name            string             `json:"name" bson:"name"`
-	Email           string             `json:"email" bson:"email"`
-	Password        string             `json:"password" bson:"password"`
-	PasswordConfirm string             `json:"passwordConfirm" bson:"passwordConfirm,omitempty"`
-	Role            string             `json:"role" bson:"role"`
-	Verified        bool               `json:"verified" bson:"verified"`
-	CreatedAt       time.Time          `json:"created_at" bson:"created_at"`
-	UpdatedAt       time.Time          `json:"updated_at" bson:"updated_at"`
+	ID                 primitive.ObjectID `json:"id" bson:"_id"`
+	Name               string             `json:"name" bson:"name"`
+	Email              string             `json:"email" bson:"email"`
+	Password           string             `json:"password" bson:"password"`
+	PasswordConfirm    string             `json:"passwordConfirm" bson:"passwordConfirm,omitempty"`
+	Role               string             `json:"role" bson:"role"`
+	Verified           bool               `json:"verified" bson:"verified"`
+	PasswordResetToken string             `json:"password_reset_token" bson:"password_reset_token"`
+	PasswordResetAt    time.Time          `json:"password_reset_at" bson:"password_reset_at"`
+	CreatedAt          time.Time          `json:"created_at" bson:"created_at"`
+	UpdatedAt          time.Time          `json:"updated_at" bson:"updated_at"`
 }
 
 type UpdateInput struct {
@@ -54,6 +56,15 @@ type UserResponse struct {
 	Role      string             `json:"role,omitempty" bson:"role,omitempty"`
 	CreatedAt time.Time          `json:"created_at" bson:"created_at"`
 	UpdatedAt time.Time          `json:"updated_at" bson:"updated_at"`
+}
+
+type ForgotPasswordInput struct {
+	Email string `json:"email" binding:"required"`
+}
+
+type ResetPasswordInput struct {
+	Password        string `json:"password" binding:"required"`
+	PasswordConfirm string `json:"passwordConfirm" binding:"required"`
 }
 
 func FilteredResponse(user *DBResponse) UserResponse {
