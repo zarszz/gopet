@@ -6,20 +6,24 @@ import (
 	"go-grpc/models"
 	"go-grpc/services"
 	"go-grpc/utils"
+	"html/template"
+	"log"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/thanhpk/randstr"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type AuthController struct {
 	authService services.AuthService
 	userService services.UserService
+	temp        *template.Template
 }
 
-func NewAuthController(authService services.AuthService, userService services.UserService) AuthController {
-	return AuthController{authService, userService}
+func NewAuthController(authService services.AuthService, userService services.UserService, temp *template.Template) AuthController {
+	return AuthController{authService, userService, temp}
 }
 
 func (ac *AuthController) SignUpUser(ctx *gin.Context) {
@@ -44,7 +48,34 @@ func (ac *AuthController) SignUpUser(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, gin.H{"status": "fail", "message": err.Error()})
 		return
 	}
-	ctx.JSON(http.StatusOK, gin.H{"status": "success", "data": newUser})
+
+	config, err := config.LoadConfig(".")
+	if err != nil {
+		log.Fatal("Could not load config", err)
+	}
+
+	code := randstr.String(20)
+
+	verificationCode := utils.Encode(code)
+
+	ac.userService.SetUserVerificationCode(newUser.ID.Hex(), "verificationCode", verificationCode)
+
+	firstName := newUser.Name
+
+	emailData := utils.EmailData{
+		URL:       config.Origin + "/verifyemail/" + code,
+		FirstName: firstName,
+		Subject:   "Your account verification code",
+	}
+
+	err = utils.SendEmail(newUser, &emailData, ac.temp, "verificationCode.html")
+	if err != nil {
+		ctx.JSON(http.StatusBadGateway, gin.H{"status": "failed", "message": "There was an error sending email"})
+		return
+	}
+
+	message := "We sent an email with a verification code to " + user.Email
+	ctx.JSON(http.StatusCreated, gin.H{"status": "success", "message": message})
 }
 
 func (ac *AuthController) SignInUser(ctx *gin.Context) {

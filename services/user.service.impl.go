@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"fmt"
 	"go-grpc/models"
 	"strings"
 
@@ -44,4 +45,19 @@ func (uc *UserServiceImpl) FindUserByEmail(email string) (*models.DBResponse, er
 		return nil, err
 	}
 	return user, nil
+}
+
+func (uc *UserServiceImpl) SetUserVerificationCode(id string, field string, value string) (*models.DBResponse, error) {
+	userId, _ := primitive.ObjectIDFromHex(id)
+	query := bson.D{{Key: "_id", Value: userId}}
+	update := bson.D{{Key: "$set", Value: bson.D{{Key: field, Value: value}}}}
+	result, err := uc.collection.UpdateOne(uc.ctx, query, update)
+
+	fmt.Print(result.ModifiedCount)
+	if err != nil {
+		fmt.Print(err)
+		return &models.DBResponse{}, err
+	}
+
+	return &models.DBResponse{}, nil
 }

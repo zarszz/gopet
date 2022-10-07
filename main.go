@@ -7,6 +7,7 @@ import (
 	"go-grpc/controllers"
 	"go-grpc/routes"
 	"go-grpc/services"
+	"html/template"
 	"log"
 	"net/http"
 
@@ -32,9 +33,12 @@ var (
 	authService         services.AuthService
 	authController      controllers.AuthController
 	authRouteController routes.AuthRouteController
+
+	temp *template.Template
 )
 
 func init() {
+	temp = template.Must(template.ParseGlob("templates/*.html"))
 	config, err := config.LoadConfig(".")
 	if err != nil {
 		log.Fatal("Could not load environment variable", err)
@@ -76,7 +80,7 @@ func init() {
 	userService = services.NewUserServiceImpl(authCollection, ctx)
 
 	authService = services.NewAuthService(authCollection, ctx)
-	authController = controllers.NewAuthController(authService, userService)
+	authController = controllers.NewAuthController(authService, userService, temp)
 	authRouteController = routes.NewAuthRouteController(authController)
 
 	userController = controllers.NewUserController(userService)
