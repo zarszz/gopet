@@ -18,17 +18,25 @@ import (
 )
 
 type AuthServiceImpl struct {
-	collection *mongo.Collection
-	ctx        context.Context
+	collection  *mongo.Collection
+	userService UserService
+	ctx         context.Context
 }
 
 func NewAuthService(collection *mongo.Collection, ctx context.Context) AuthService {
 	return &AuthServiceImpl{
-		collection, ctx,
+		userService: NewUserServiceImpl(collection, ctx),
+		collection:  collection,
+		ctx:         ctx,
 	}
 }
 
-func (uc *AuthServiceImpl) SignUpUser(user *models.SignUpInput) (*models.DBResponse, error) {
+func (uc *AuthServiceImpl) SignUpUser(user *models.SignUpInput, template *template.Template) (*models.DBResponse, error) {
+
+	if user.Password != user.PasswordConfirm {
+		return nil, errors.New("passwords do not match")
+	}
+
 	user.CreatedAt = time.Now()
 	user.UpdatedAt = time.Now()
 	user.Email = strings.ToLower(user.Email)
@@ -63,11 +71,57 @@ func (uc *AuthServiceImpl) SignUpUser(user *models.SignUpInput) (*models.DBRespo
 		return nil, err
 	}
 
+	config, err := config.LoadConfig(".")
+	if err != nil {
+		log.Fatal("Could not load config", err)
+	}
+
+	code := randstr.String(20)
+
+	verificationCode := utils.Encode(code)
+
+	uc.userService.SetUserVerificationCode(newUser.ID.Hex(), "verificationCode", verificationCode)
+
+	firstName := newUser.Name
+
+	emailData := utils.EmailData{
+		URL:       config.Origin + "/verifyemail/" + code,
+		FirstName: firstName,
+		Subject:   "Your account verification code",
+	}
+
+	_ = utils.SendEmail(newUser, &emailData, template, "verificationCode.html")
+
 	return newUser, nil
 }
 
-func (uc *AuthServiceImpl) SignInUser(user *models.SignInInput) (*models.DBResponse, error) {
-	return nil, nil
+func (uc *AuthServiceImpl) SignInUser(input *models.SignInInput) (*string, *string, error) {
+	user, err := uc.userService.FindUserByEmail(input.Email)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, nil, errors.New("invalid email or password")
+		}
+		return nil, nil, err
+	}
+
+	if err := utils.VerifyPassword(user.Password, input.Password); err != nil {
+		return nil, nil, errors.New("invalid email or password")
+	}
+
+	config, _ := config.LoadConfig(".")
+
+	// generate token
+	access_token, err := utils.CreateToken(config.AccessTokenExpiresIn, user.ID, config.AccessTokenPrivateKey)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	refresh_token, err := utils.CreateToken(config.RefreshTokenExpiresIn, user.ID, config.RefreshTokenPrivateKey)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &access_token, &refresh_token, nil
 }
 
 func (ac *AuthServiceImpl) ForgotPassword(email string, template *template.Template) error {

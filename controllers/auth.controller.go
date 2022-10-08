@@ -9,11 +9,8 @@ import (
 	"html/template"
 	"log"
 	"net/http"
-	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/thanhpk/randstr"
-	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type AuthController struct {
@@ -34,43 +31,9 @@ func (ac *AuthController) SignUpUser(ctx *gin.Context) {
 		return
 	}
 
-	if user.Password != user.PasswordConfirm {
-		ctx.JSON(http.StatusBadRequest, gin.H{"status": "fail", "message": "Passwords do not match"})
-		return
-	}
-
-	newUser, err := ac.authService.SignUpUser(user)
+	_, err := ac.authService.SignUpUser(user, ac.temp)
 	if err != nil {
-		if strings.Contains(err.Error(), "email already exist") {
-			ctx.JSON(http.StatusConflict, gin.H{"status": "fail", "message": err.Error()})
-			return
-		}
 		ctx.JSON(http.StatusBadRequest, gin.H{"status": "fail", "message": err.Error()})
-		return
-	}
-
-	config, err := config.LoadConfig(".")
-	if err != nil {
-		log.Fatal("Could not load config", err)
-	}
-
-	code := randstr.String(20)
-
-	verificationCode := utils.Encode(code)
-
-	ac.userService.SetUserVerificationCode(newUser.ID.Hex(), "verificationCode", verificationCode)
-
-	firstName := newUser.Name
-
-	emailData := utils.EmailData{
-		URL:       config.Origin + "/verifyemail/" + code,
-		FirstName: firstName,
-		Subject:   "Your account verification code",
-	}
-
-	err = utils.SendEmail(newUser, &emailData, ac.temp, "verificationCode.html")
-	if err != nil {
-		ctx.JSON(http.StatusBadGateway, gin.H{"status": "failed", "message": "There was an error sending email"})
 		return
 	}
 
@@ -85,38 +48,20 @@ func (ac *AuthController) SignInUser(ctx *gin.Context) {
 		return
 	}
 
-	user, err := ac.userService.FindUserByEmail(credentials.Email)
+	access_token, refresh_token, err := ac.authService.SignInUser(credentials)
 	if err != nil {
-		if err == mongo.ErrNoDocuments {
-			ctx.JSON(http.StatusBadRequest, gin.H{"status": "fail", "message": "invalid email or password"})
-			return
-		}
-		ctx.JSON(http.StatusBadRequest, gin.H{"status": "fail", "message": err.Error()})
+		ctx.JSON(http.StatusBadRequest, gin.H{"status": "fail", "message": "invalid username or password"})
 		return
 	}
 
-	if err := utils.VerifyPassword(user.Password, credentials.Password); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"status": "fail", "message": "invalid email or password"})
-		return
-	}
-
-	config, _ := config.LoadConfig(".")
-
-	// generate token
-	access_token, err := utils.CreateToken(config.AccessTokenExpiresIn, user.ID, config.AccessTokenPrivateKey)
+	config, err := config.LoadConfig(".")
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"status": "fail", "message": err.Error()})
+		ctx.JSON(http.StatusInternalServerError, gin.H{"status": "fail", "message": "operation failed"})
 		return
 	}
 
-	refresh_token, err := utils.CreateToken(config.RefreshTokenExpiresIn, user.ID, config.RefreshTokenPrivateKey)
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"status": "fail", "message": err.Error()})
-		return
-	}
-
-	ctx.SetCookie("access_token", access_token, config.AccessTokenMaxAge*60, "/", "localhost", false, true)
-	ctx.SetCookie("refresh_token", refresh_token, config.RefreshTokenMaxAge*60, "/", "localhost", false, true)
+	ctx.SetCookie("access_token", *access_token, config.AccessTokenMaxAge*60, "/", "localhost", false, true)
+	ctx.SetCookie("refresh_token", *refresh_token, config.RefreshTokenMaxAge*60, "/", "localhost", false, true)
 	ctx.SetCookie("logged_in", "true", config.AccessTokenMaxAge*60, "/", "localhost", false, false)
 	ctx.JSON(http.StatusOK, gin.H{"status": "success", "access_token": access_token})
 }
