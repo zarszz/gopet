@@ -137,7 +137,16 @@ func (ac *AuthServiceImpl) ResetPassword(token string, input *models.ResetPasswo
 		return err
 	}
 
-	if time.Now().After(user.PasswordResetAt.Add(time.Minute * 10)) {
+	config, err := config.LoadConfig(".")
+	if err != nil {
+		log.Printf("[ResetPassword] error when load config : %v", err)
+		return err
+	}
+
+	// in minute
+	resetPasswordExpiredTime := time.Duration(config.ResetPasswordExpireTime)
+
+	if time.Now().After(user.PasswordResetAt.Add(time.Minute * resetPasswordExpiredTime)) {
 		log.Println("[ResetPassword] reset password expired")
 		return errors.New("token expired")
 	}
