@@ -39,6 +39,9 @@ var (
 	authController      controllers.AuthController
 	authRouteController routes.AuthRouteController
 
+	postCollection *mongo.Collection
+	postService    services.PostService
+
 	temp *template.Template
 )
 
@@ -82,6 +85,7 @@ func init() {
 
 	// init dep
 	authCollection := mongoClient.Database("go_grpc").Collection("users")
+	postCollection = mongoClient.Database("go_grpc").Collection("posts")
 	userService = services.NewUserServiceImpl(authCollection, ctx)
 
 	authService = services.NewAuthService(authCollection, ctx)
@@ -90,6 +94,8 @@ func init() {
 
 	userController = controllers.NewUserController(userService)
 	userRouteController = routes.NewRouteUserController(userController)
+
+	postService = services.NewPostService(postCollection, ctx)
 
 	server = gin.Default()
 }
@@ -101,8 +107,8 @@ func main() {
 	}
 
 	defer mongoClient.Disconnect(ctx)
-	startGinServer(config)
-	startGrpcServer(config, authCollection)
+	// startGinServer(config)
+	startGrpcServer(config, authCollection, postCollection)
 }
 
 func startGinServer(config config.Config) {
@@ -130,9 +136,9 @@ func startGinServer(config config.Config) {
 	log.Fatal(server.Run(":" + config.Port))
 }
 
-func startGrpcServer(config config.Config, collection *mongo.Collection) {
+func startGrpcServer(config config.Config, aCollection *mongo.Collection, pCollection *mongo.Collection) {
 	authServer, err := gapi.NewGrpcAuthServer(
-		config, authService, userService, collection, temp,
+		config, authService, userService, aCollection, temp,
 	)
 	if err != nil {
 		log.Fatalf("cannot create auth grpc server : %v", err)
@@ -145,9 +151,15 @@ func startGrpcServer(config config.Config, collection *mongo.Collection) {
 		log.Fatalf("cannot create user grpc server : %v", err)
 	}
 
+	postServer, err := gapi.NewGrpcPostServer(pCollection, postService)
+	if err != nil {
+		log.Fatalf("cannot create post grpc server : %v", err)
+	}
+
 	grpcServer := grpc.NewServer()
 	pb.RegisterAuthServiceServer(grpcServer, authServer)
 	pb.RegisterUserServiceServer(grpcServer, userServer)
+	pb.RegisterPostServiceServer(grpcServer, postServer)
 	reflection.Register(grpcServer)
 
 	listener, err := net.Listen("tcp", config.GrpcServerAddress)

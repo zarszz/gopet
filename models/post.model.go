@@ -29,6 +29,7 @@ type UpdatePost struct {
 	Title    string    `json:"title,omitempty" bson:"title,omitempty"`
 	Content  string    `json:"content,omitempty" bson:"content,omitempty"`
 	Image    string    `json:"image,omitempty" bson:"image,omitempty"`
+	User     string    `json:"string,omitempty" bson:"string,omitempty"`
 	CreateAt time.Time `json:"created_at,omitempty" bson:"created_at,omitempty"`
 	UpdateAt time.Time `json:"updated_at,omitempty" bson:"updated_at,omitempty"`
 }

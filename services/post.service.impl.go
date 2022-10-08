@@ -64,7 +64,7 @@ func (p *PostServiceImpl) UpdatePost(id string, data *models.UpdatePost) (*model
 	res := p.postCollection.FindOneAndUpdate(p.ctx, query, update, options.FindOneAndUpdate().SetReturnDocument(1))
 
 	var updatedPost *models.DBPost
-	if err := res.Decode(*updatedPost); err != nil {
+	if err := res.Decode(&updatedPost); err != nil {
 		return nil, errors.New("no post with that id exists")
 	}
 
