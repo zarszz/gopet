@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"go-grpc/config"
 	"go-grpc/controllers"
+	"go-grpc/gapi"
+	"go-grpc/pb"
 	"go-grpc/routes"
 	"go-grpc/services"
 	"html/template"
 	"log"
+	"net"
 	"net/http"
 
 	"github.com/gin-contrib/cors"
@@ -17,6 +20,8 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 )
 
 var (
@@ -96,7 +101,11 @@ func main() {
 	}
 
 	defer mongoClient.Disconnect(ctx)
+	// startGinServer(config)
+	startGrpcServer(config, authCollection)
+}
 
+func startGinServer(config config.Config) {
 	value, err := redisClient.Get(ctx, "test").Result()
 	if err == redis.Nil {
 		fmt.Println("key: test does not exists")
@@ -119,4 +128,28 @@ func main() {
 	userRouteController.UserRoute(router, userService)
 
 	log.Fatal(server.Run(":" + config.Port))
+}
+
+func startGrpcServer(config config.Config, collection *mongo.Collection) {
+	server, err := gapi.NewGrpcServer(
+		config, authService, userService, collection, temp,
+	)
+	if err != nil {
+		log.Fatalf("cannot create grpc server : %v", err)
+	}
+
+	grpcServer := grpc.NewServer()
+	pb.RegisterAuthServiceServer(grpcServer, server)
+	reflection.Register(grpcServer)
+
+	listener, err := net.Listen("tcp", config.GrpcServerAddress)
+	if err != nil {
+		log.Fatalf("cannot create grpc server : %v", err)
+	}
+
+	log.Printf("start gRPC server on %s", listener.Addr().String())
+	err = grpcServer.Serve(listener)
+	if err != nil {
+		log.Fatalf("cannot create grpc server : %v", err)
+	}
 }

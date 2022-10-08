@@ -28,6 +28,8 @@ type Config struct {
 	SMTPPass  string `mapstructure:"SMTP_PASS"`
 	SMTPPort  int    `mapstructure:"SMTP_PORT"`
 	SMTPUser  string `mapstructure:"SMTP_USER"`
+
+	GrpcServerAddress string `mapstructure:"GRPC_SERVER_ADDRESS"`
 }
 
 func LoadConfig(path string) (config Config, err error) {

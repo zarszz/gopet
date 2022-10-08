@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"go-grpc/models"
 	"strings"
+	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -60,4 +61,39 @@ func (uc *UserServiceImpl) SetUserVerificationCode(id string, field string, valu
 	}
 
 	return &models.DBResponse{}, nil
+}
+
+func (uc *UserServiceImpl) UnsetVerificationCode(verificationCode string) (int, error) {
+	filterQuery := bson.D{
+		{
+			Key: "verificationCode", Value: verificationCode,
+		},
+	}
+	updateQuery := bson.D{
+		{
+			Key: "$set",
+			Value: bson.D{
+				{
+					Key: "verified", Value: true,
+				},
+				{
+					Key: "updated_at", Value: time.Now(),
+				},
+			},
+		},
+		{
+			Key: "$unset",
+			Value: bson.D{
+				{
+					Key:   "verificationCode",
+					Value: "",
+				},
+			},
+		},
+	}
+	result, err := uc.collection.UpdateOne(uc.ctx, filterQuery, updateQuery)
+	if err != nil {
+		return 0, err
+	}
+	return int(result.MatchedCount), nil
 }
