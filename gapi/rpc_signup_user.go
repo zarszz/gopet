@@ -10,7 +10,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func (server *Server) SignUpUser(ctx context.Context, req *pb.SignUpUserInput) (*pb.GenericResponse, error) {
+func (server *AuthServer) SignUpUser(ctx context.Context, req *pb.SignUpUserInput) (*pb.GenericResponse, error) {
 	if req.GetPassword() != req.GetPasswordConfirm() {
 		return nil, status.Errorf(codes.InvalidArgument, "passwords do not match")
 	}

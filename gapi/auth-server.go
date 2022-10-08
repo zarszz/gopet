@@ -9,7 +9,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-type Server struct {
+type AuthServer struct {
 	pb.UnimplementedAuthServiceServer
 	config         config.Config
 	authService    services.AuthService
@@ -18,10 +18,10 @@ type Server struct {
 	template       *template.Template
 }
 
-func NewGrpcServer(
+func NewGrpcAuthServer(
 	config config.Config, authService services.AuthService, userService services.UserService,
-	userCollection *mongo.Collection, template *template.Template) (*Server, error) {
-	server := &Server{
+	userCollection *mongo.Collection, template *template.Template) (*AuthServer, error) {
+	server := &AuthServer{
 		config:         config,
 		authService:    authService,
 		userService:    userService,

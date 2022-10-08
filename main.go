@@ -101,7 +101,7 @@ func main() {
 	}
 
 	defer mongoClient.Disconnect(ctx)
-	// startGinServer(config)
+	startGinServer(config)
 	startGrpcServer(config, authCollection)
 }
 
@@ -131,15 +131,23 @@ func startGinServer(config config.Config) {
 }
 
 func startGrpcServer(config config.Config, collection *mongo.Collection) {
-	server, err := gapi.NewGrpcServer(
+	authServer, err := gapi.NewGrpcAuthServer(
 		config, authService, userService, collection, temp,
 	)
 	if err != nil {
-		log.Fatalf("cannot create grpc server : %v", err)
+		log.Fatalf("cannot create auth grpc server : %v", err)
+	}
+
+	userServer, err := gapi.NewGrpcUserServer(
+		config, userService,
+	)
+	if err != nil {
+		log.Fatalf("cannot create user grpc server : %v", err)
 	}
 
 	grpcServer := grpc.NewServer()
-	pb.RegisterAuthServiceServer(grpcServer, server)
+	pb.RegisterAuthServiceServer(grpcServer, authServer)
+	pb.RegisterUserServiceServer(grpcServer, userServer)
 	reflection.Register(grpcServer)
 
 	listener, err := net.Listen("tcp", config.GrpcServerAddress)
